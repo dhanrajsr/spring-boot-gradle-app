@@ -1,0 +1,86 @@
+plugins {
+    id 'org.springframework.boot' version '3.2.3'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'java'
+    id 'jacoco'                                              // Code coverage
+    id 'checkstyle'                                          // Code style
+    id 'com.github.spotbugs' version '6.0.9'                // Static analysis
+    id 'org.owasp.dependencycheck' version '9.0.9'          // Security scan
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    spotbugs 'com.github.spotbugs:spotbugs:4.8.4'
+}
+
+// ── Tests ──────────────────────────────────────────────────────────────────
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport  // Generate coverage report after tests
+}
+
+// ── JaCoCo: Code Coverage ──────────────────────────────────────────────────
+jacoco {
+    toolVersion = '0.8.11'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80  // Fail if coverage drops below 80%
+            }
+        }
+    }
+}
+
+// ── Checkstyle: Code Style ─────────────────────────────────────────────────
+checkstyle {
+    toolVersion = '10.14.0'
+    configFile = file("${rootDir}/config/checkstyle/checkstyle.xml")
+    ignoreFailures = false
+    showViolations = true
+}
+
+// ── SpotBugs: Static Analysis ──────────────────────────────────────────────
+spotbugs {
+    effort = 'max'
+    reportLevel = 'medium'
+    ignoreFailures = false
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("${buildDir}/reports/spotbugs/main.html")
+        }
+    }
+}
+
+// ── OWASP Dependency Check: Security ──────────────────────────────────────
+dependencyCheck {
+    failBuildOnCVSS = 7
+    formats = ['HTML']
+    outputDirectory = "${buildDir}/reports"
+}
