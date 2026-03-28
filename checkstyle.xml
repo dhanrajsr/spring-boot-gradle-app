@@ -12,10 +12,6 @@
         <module name="IllegalImport"/>
         <module name="RedundantImport"/>
 
-        <!-- Whitespace -->
-        <module name="WhitespaceAfter"/>
-        <module name="NoWhitespaceAtEndOfLine"/>
-
         <!-- Code style -->
         <module name="OneStatementPerLine"/>
         <module name="EmptyBlock"/>

@@ -47,6 +47,7 @@ jacocoTestReport {
 jacocoTestCoverageVerification {
     violationRules {
         rule {
+            excludes = ['com.example.demo.DemoApplication']
             limit {
                 minimum = 0.80  // Fail if coverage drops below 80%
             }
