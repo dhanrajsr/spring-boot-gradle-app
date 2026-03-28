@@ -45,9 +45,12 @@ jacocoTestReport {
 }
 
 jacocoTestCoverageVerification {
+    // Exclude main application class — not exercised by @WebMvcTest
+    classDirectories.setFrom(files(classDirectories.files.collect {
+        fileTree(dir: it, exclude: ['com/example/demo/DemoApplication.class'])
+    }))
     violationRules {
         rule {
-            excludes = ['com.example.demo.DemoApplication']
             limit {
                 minimum = 0.80  // Fail if coverage drops below 80%
             }
