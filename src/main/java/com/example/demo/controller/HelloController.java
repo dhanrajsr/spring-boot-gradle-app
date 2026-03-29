@@ -20,4 +20,9 @@ public class HelloController {
     public Map<String, String> health() {
         return Map.of("status", "UP");
     }
+
+    @GetMapping("/version")
+    public Map<String, String> version() {
+        return Map.of("version", "1.0.0", "build", "gradle", "app", "spring-boot");
+    }
 }
