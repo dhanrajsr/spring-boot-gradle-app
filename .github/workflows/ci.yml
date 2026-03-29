@@ -324,7 +324,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: http://localhost:8081
+      url: http://localhost:8091
 
     steps:
       - name: Log in to Docker Hub
@@ -347,10 +347,10 @@ jobs:
           docker run -d \
             --name ${{ env.IMAGE_NAME }}-production \
             --restart unless-stopped \
-            -p 8081:8081 \
+            -p 8091:8081 \
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Smoke test - health check
         run: |
-          sleep 5
-          curl --retry 5 --retry-delay 3 --fail http://localhost:8081/api/health
+          sleep 20
+          curl --retry 5 --retry-delay 5 --fail http://localhost:8091/api/health
