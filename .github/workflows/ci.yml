@@ -10,6 +10,8 @@ on:
 env:
   JAVA_VERSION: '17'
   IMAGE_NAME: spring-gradle-app
+  GAR_REGISTRY: us-west1-docker.pkg.dev
+  GAR_REPOSITORY: us-west1-docker.pkg.dev/gen-lang-client-0110201077/apps-images
 
 jobs:
   # ─────────────────────────────────────────
@@ -237,13 +239,17 @@ jobs:
           retention-days: 1
 
   # ─────────────────────────────────────────
-  # Stage 7: Push to Registry (main only)
+  # Stage 7: Push to GCP Artifact Registry (main only)
   # ─────────────────────────────────────────
   docker-push:
-    name: Push Docker Image to Registry
+    name: Push Docker Image to GCP Artifact Registry
     runs-on: ubuntu-latest
     needs: docker-build-scan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Download Docker image
@@ -255,20 +261,26 @@ jobs:
       - name: Load Docker image
         run: docker load --input /tmp/image.tar
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Tag and push image
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GAR_REGISTRY }} --quiet
+
+      - name: Tag and push image to Artifact Registry
         run: |
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
   # ─────────────────────────────────────────
   # Stage 8: Deploy to Staging (main only)
@@ -284,16 +296,26 @@ jobs:
       name: staging
       url: http://localhost:8081
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GAR_REGISTRY }} --quiet
 
       - name: Pull latest image
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          docker pull ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Stop and remove existing container
         run: |
@@ -306,7 +328,7 @@ jobs:
             --name ${{ env.IMAGE_NAME }}-staging \
             --restart unless-stopped \
             -p 8081:8081 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Smoke test - health check
         run: |
@@ -326,16 +348,26 @@ jobs:
       name: production
       url: http://localhost:8091
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GAR_REGISTRY }} --quiet
 
       - name: Pull latest image
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          docker pull ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Stop and remove existing container
         run: |
@@ -348,7 +380,7 @@ jobs:
             --name ${{ env.IMAGE_NAME }}-production \
             --restart unless-stopped \
             -p 8091:8081 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Smoke test - health check
         run: |
