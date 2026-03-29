@@ -285,6 +285,12 @@ jobs:
       url: http://localhost:8081
 
     steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Pull latest image
         run: |
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
@@ -304,8 +310,8 @@ jobs:
 
       - name: Smoke test - health check
         run: |
-          sleep 5
-          curl --retry 5 --retry-delay 3 --fail http://localhost:8081/api/health
+          sleep 20
+          curl --retry 5 --retry-delay 5 --fail http://localhost:8081/api/health
 
   # ─────────────────────────────────────────
   # Stage 9: Deploy to Production
@@ -321,6 +327,12 @@ jobs:
       url: http://localhost:8081
 
     steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Pull latest image
         run: |
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
