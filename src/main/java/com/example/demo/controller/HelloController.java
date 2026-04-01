@@ -23,6 +23,6 @@ public class HelloController {
 
     @GetMapping("/version")
     public Map<String, String> version() {
-        return Map.of("version", "1.0.0", "build", "gradle", "app", "spring-boot");
+        return Map.of("version", "1.1.0", "build", "gradle", "app", "spring-boot");
     }
 }
