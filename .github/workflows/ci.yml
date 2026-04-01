@@ -239,6 +239,8 @@ jobs:
   # ─────────────────────────────────────────
   # Stage 7: Push to Docker Hub (main only)
   # ─────────────────────────────────────────
+  # Stage 7: Push to Docker Hub (main only)
+  # ─────────────────────────────────────────
   docker-push:
     name: Push Docker Image to Docker Hub
     runs-on: ubuntu-latest
@@ -275,82 +277,57 @@ jobs:
   # Runs on self-hosted runner (your MacBook)
   # so it can deploy to local Docker Desktop
   # ─────────────────────────────────────────
+  # Stage 8: Update GitOps repo → ArgoCD auto-deploys to Staging
+  # CI pushes new image tag to spring-gitops repo
+  # ArgoCD detects the change and syncs automatically (no approval)
+  # ─────────────────────────────────────────
   deploy-staging:
-    name: Deploy to Staging (Local Docker Desktop)
-    runs-on: [self-hosted, docker, linux]
+    name: Update GitOps Repo → ArgoCD deploys to Staging
+    runs-on: ubuntu-latest
     needs: docker-push
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: staging
-      url: http://localhost:8081
+      url: http://localhost:30081
 
     steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Checkout GitOps repo
+        uses: actions/checkout@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: dhanrajsr/spring-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: spring-gitops
 
-      - name: Pull latest image
+      - name: Update image tag in Helm values
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          sed -i "s/tag:.*/tag: ${{ github.sha }}/" spring-gitops/apps/spring-gradle/helm/values.yaml
 
-      - name: Stop and remove existing container
+      - name: Commit and push to GitOps repo
         run: |
-          docker stop ${{ env.IMAGE_NAME }}-staging 2>/dev/null || true
-          docker rm   ${{ env.IMAGE_NAME }}-staging 2>/dev/null || true
-
-      - name: Run container on Docker Desktop
-        run: |
-          docker run -d \
-            --name ${{ env.IMAGE_NAME }}-staging \
-            --restart unless-stopped \
-            -p 8081:8081 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Smoke test - health check
-        run: |
-          sleep 20
-          curl --retry 5 --retry-delay 5 --fail http://localhost:8081/api/health
+          cd spring-gitops
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apps/spring-gradle/helm/values.yaml
+          git commit -m "ci(spring-gradle): update image tag to ${{ github.sha }}"
+          git push
 
   # ─────────────────────────────────────────
-  # Stage 9: Deploy to Production
-  # Manual approval gate via GitHub Environments
+  # Stage 9: Await approval → ArgoCD syncs Production
+  # Requires manual approval in GitHub Environments
+  # After approval, go to ArgoCD UI and click Sync on spring-gradle-production
   # ─────────────────────────────────────────
   deploy-production:
-    name: Deploy to Production (Local Docker Desktop)
-    runs-on: [self-hosted, docker, linux]
+    name: Approve → ArgoCD syncs Production
+    runs-on: ubuntu-latest
     needs: deploy-staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: http://localhost:8091
+      url: http://localhost:30091
 
     steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Pull latest image
+      - name: Notify production is ready to sync
         run: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Stop and remove existing container
-        run: |
-          docker stop ${{ env.IMAGE_NAME }}-production 2>/dev/null || true
-          docker rm   ${{ env.IMAGE_NAME }}-production 2>/dev/null || true
-
-      - name: Run container on Docker Desktop
-        run: |
-          docker run -d \
-            --name ${{ env.IMAGE_NAME }}-production \
-            --restart unless-stopped \
-            -p 8091:8081 \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Smoke test - health check
-        run: |
-          sleep 20
-          curl --retry 5 --retry-delay 5 --fail http://localhost:8091/api/health
+          echo "Staging deployed successfully with image tag: ${{ github.sha }}"
+          echo "Production ArgoCD app is OutOfSync — go to ArgoCD UI and click Sync to deploy."
+          echo "ArgoCD URL: https://localhost:31607"
