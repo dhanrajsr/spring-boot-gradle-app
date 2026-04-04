@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
   workflow_dispatch:
+    inputs:
+      cluster:
+        description: "Target cluster for deployment"
+        required: false
+        type: choice
+        options: [kind, eks, aks, gke]
+        default: kind
 
 env:
   JAVA_VERSION: '17'
@@ -296,6 +303,9 @@ jobs:
       url: http://localhost:30081
 
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
       - name: Checkout GitOps repo
         uses: actions/checkout@v4
         with:
@@ -303,18 +313,26 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
           path: spring-gitops
 
-      - name: Update image tag in Helm values
+      - name: Update image tag and appVersion, then push to GitOps repo
         run: |
+          APP_VERSION=$(grep '^version' build.gradle | head -1 | awk -F"'" '{print $2}' | sed 's/-SNAPSHOT//')
           sed -i "s/tag:.*/tag: ${{ github.sha }}/" spring-gitops/apps/spring-gradle/helm/values.yaml
-
-      - name: Commit and push to GitOps repo
-        run: |
+          sed -i "s/^appVersion:.*/appVersion: \"${APP_VERSION}\"/" spring-gitops/apps/spring-gradle/helm/Chart.yaml
           cd spring-gitops
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/spring-gradle/helm/values.yaml
-          git commit -m "ci(spring-gradle): update image tag to ${{ github.sha }}"
+          git add apps/spring-gradle/helm/values.yaml apps/spring-gradle/helm/Chart.yaml
+          git commit -m "ci(spring-gradle): update image tag to ${{ github.sha }} and appVersion to ${APP_VERSION}"
           git push
+
+      - name: Trigger CD pipeline
+        run: |
+          gh workflow run cd.yml \
+            --repo dhanrajsr/spring-gitops \
+            --ref main \
+            --field cluster=${{ inputs.cluster || 'kind' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
 
   # ─────────────────────────────────────────
   # Stage 9: Await approval → ArgoCD syncs Production
