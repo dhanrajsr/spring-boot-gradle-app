@@ -6,13 +6,6 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
   workflow_dispatch:
-    inputs:
-      cluster:
-        description: "Target cluster for deployment"
-        required: false
-        type: choice
-        options: [kind, eks, aks, gke]
-        default: kind
 
 env:
   JAVA_VERSION: '17'
@@ -325,14 +318,6 @@ jobs:
           git commit -m "ci(spring-gradle): update image tag to ${{ github.sha }} and appVersion to ${APP_VERSION}"
           git push
 
-      - name: Trigger CD pipeline
-        run: |
-          gh workflow run cd.yml \
-            --repo dhanrajsr/spring-gitops \
-            --ref main \
-            --field cluster=${{ inputs.cluster || 'kind' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
 
   # ─────────────────────────────────────────
   # Stage 9: Await approval → ArgoCD syncs Production
